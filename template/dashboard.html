@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loan Analytics Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #ff5e1a;
+            --secondary-color: #6d9ff0;
+            --gradient-bg: linear-gradient(135deg, #ff5e1a, #6d9ff0);
+            --bg-color: #f8f9fa;
+            --text-color: #333;
+            --sidebar-width: 280px; /* Increased width to fix layout issues */
+            --sidebar-collapsed-width: 0px;
+            --header-height: 60px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --border-radius: 8px;
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow-x: hidden;
+        }
+
+        .dashboard-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Header Styles */
+        .header {
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            height: var(--header-height);
+            background: var(--gradient-bg);
+            box-shadow: var(--box-shadow);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 10;
+            transition: left var(--transition-speed);
+            color: white;
+        }
+
+        .header.sidebar-collapsed {
+            left: var(--sidebar-collapsed-width);
+        }
+
+        .toggle-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            margin-right: 15px;
+            transition: background-color 0.2s;
+        }
+
+        .toggle-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .header-title {
+            flex-grow: 1;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: var(--gradient-bg);
+            box-shadow: var(--box-shadow);
+            z-index: 20;
+            transition: width var(--transition-speed), transform var(--transition-speed);
+            overflow-y: auto;
+            color: white;
+        }
+
+        /* Custom Scrollbar for Sidebar */
+        .sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Firefox scrollbar */
+        .sidebar {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar.collapsed {
+            width: var(--sidebar-collapsed-width);
+            transform: translateX(-100%);
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(222, 226, 232, 0.9);
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .sidebar-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .nav-links {
+            padding: 20px 0;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 14px 20px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+            margin: 2px 0;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+            border-left-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .nav-link.active {
+            background-color: rgba(0, 0, 0, 0.1);
+            border-left-color: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-link i {
+            margin-right: 12px;
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover i, .nav-link.active i {
+            transform: scale(1.2);
+        }
+
+        .filter-section {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            /* background-color: rgba(256, 256, 256, 0.05); */
+        }
+
+        .filter-section h3 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            text-align: center;
+            position: relative;
+            padding-bottom: 10px;
+        }
+        
+        .filter-section h3::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 2px;
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Collapsible Filter Group Styles */
+        .filter-group {
+            margin-bottom: 15px;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: rgba(222, 226, 232, 0.1);
+        }
+
+        .filter-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            cursor: pointer;
+            background-color: rgba(222, 226, 232, 0.1);
+            transition: background-color 0.3s;
+        }
+
+        .filter-group-header:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .filter-group-header label {
+            margin: 0;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .filter-group-header i {
+            transition: transform 0.3s ease;
+        }
+
+        .filter-group-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .filter-group.expanded .filter-group-content {
+            max-height: 500px; /* Adjust as needed */
+            padding: 15px;
+        }
+
+        .filter-group.expanded .filter-group-header i {
+            transform: rotate(180deg);
+        }
+        
+        .filter-group:hover label {
+            color: white;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+        }
+
+        .filter-group select, .filter-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 12px;
+            background-color: rgba(0, 0, 0, 0.2);
+            color: white;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .filter-group select:focus, .filter-group input:focus {
+            outline: none;
+            border-color: rgba(0, 0, 0, 0.8);
+            box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+        }
+        
+        .filter-group select:hover, .filter-group input:hover {
+            background-color: rgba(255, 255, 255, 0.25);
+        }
+
+        .filter-group select {
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 12px;
+            padding-right: 30px;
+        }
+
+        .filter-group select option {
+            background: var(--gradient-bg);
+            color: white;
+            padding: 10px;
+        }
+        
+        /* Style for dropdown when opened */
+        .filter-group select::-ms-expand {
+            display: none;
+        }
+
+        .filter-group .range-inputs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .filter-group .range-inputs input {
+            width: 50%;
+        }
+
+        .filter-group input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Search input styling */
+        .search-container {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .search-container input {
+            width: 100%;
+            padding: 8px 12px 8px 35px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            font-size: 14px;
+            background-color: rgba(0, 0, 0, 0.2);
+            color: white;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .search-container input:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+        }
+
+        .search-container i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .apply-filters {
+            background-color: rgba(0, 0, 0, 0.2);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-size: 14px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-top: 10px;
+        }
+
+        .apply-filters:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+        
+        .apply-filters:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .apply-filters::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.7s ease;
+        }
+        
+        .apply-filters:hover::before {
+            left: 100%;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--header-height);
+            padding: 20px;
+            flex-grow: 1;
+            transition: margin-left var(--transition-speed);
+        }
+
+        .main-content.sidebar-collapsed {
+            margin-left: var(--sidebar-collapsed-width);
+        }
+
+        .content-wrapper {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 20px;
+            min-height: calc(100vh - var(--header-height) - 40px);
+            display: none;
+        }
+
+        .content-wrapper.active {
+            display: block;
+        }
+
+        /* Chart Grid */
+        .chart-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .chart-container {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 15px;
+            height: 500px;
+            width: 750px;
+            display: flex;
+            justify-content: center; /* centers horizontally */
+            align-items: center;     /* centers vertically */
+        }
+
+        /* .chart-container {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 15px;
+            height: 400px;
+        } */
+        .chart-container-xl {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 10px;
+            height: 580px;
+            width: 1500px;
+            display: flex;
+            justify-content: center; /* centers horizontally */
+            align-items: center;     /* centers vertically */
+        }
+        .chart-container-xl2 {
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 10px;
+            height: 700px;
+            width: 1500px;
+            display: flex;
+            justify-content: center; /* centers horizontally */
+            align-items: center;     /* centers vertically */
+        }
+
+        /* Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .data-table tbody tr:hover {
+            background-color: rgba(109, 159, 240, 0.1);
+        }
+
+        .positive-feedback {
+            color: #28a745;
+        }
+
+        .negative-feedback {
+            color: #dc3545;
+        }
+
+        /* Custom scrollbar for main content */
+        .content-wrapper::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .content-wrapper::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .content-wrapper::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 10px;
+        }
+
+        .content-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #ccc;
+        }
+
+        /* Firefox scrollbar */
+        .content-wrapper {
+            scrollbar-width: thin;
+            scrollbar-color: #ddd #f1f1f1;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 992px) {
+            :root {
+                --sidebar-width: 250px;
+            }
+            
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --sidebar-width: 100%;
+                --header-height: 50px;
+            }
+            
+            .header {
+                left: 0;
+            }
+            
+            .sidebar:not(.collapsed) {
+                width: 100%;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Checkbox Select Styles - Fixed layout */
+        .checkbox-select {
+            background-color: rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 12px;
+        }
+
+        /* Custom scrollbar for checkbox select */
+        .checkbox-select::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .checkbox-select::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .checkbox-select::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        .checkbox-select::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Firefox scrollbar */
+        .checkbox-select {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+        }
+
+        .select-all {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+            background-color: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+        }
+
+        .checkbox-options {
+            padding: 8px;
+        }
+
+        .checkbox-option {
+            padding: 6px 8px;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .checkbox-option:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        /* Fixed checkbox and label alignment */
+        .checkbox-option input[type="checkbox"],
+        .select-all input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .checkbox-option label,
+        .select-all label {
+            margin: 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: normal;
+            text-transform: none;
+            letter-spacing: normal;
+            color: white;
+            flex-grow: 1;
+        }
+
+        /* Custom checkbox styling */
+        .checkbox-option input[type="checkbox"],
+        .select-all input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 3px;
+            cursor: pointer;
+            display: inline-block;
+            height: 16px;
+            position: relative;
+            vertical-align: middle;
+            width: 16px;
+            flex-shrink: 0;
+        }
+
+        .checkbox-option input[type="checkbox"]:checked,
+        .select-all input[type="checkbox"]:checked {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .checkbox-option input[type="checkbox"]:checked::after,
+        .select-all input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 2px;
+            width: 4px;
+            height: 8px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+        .logo-image {
+        height: 40px; /* Adjust size as needed */
+        width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">
+                <!-- <img src="pay-logo.png" alt="Pay Logo" class="logo-image"> -->
+                <img src="{{ url_for('static', filename='pay-logo.png') }}" alt="Pay Logo" class="logo-image">
+
+            </div>
+            <button class="sidebar-close" id="close-sidebar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link active" data-tab="quantitative-metrics">
+                    <i class="fas fa-chart-bar"></i> Quantitative Metrics
+                </a>
+                <a href="#" class="nav-link" data-tab="sentiment-analysis">
+                    <i class="fas fa-comments"></i> Sentiment Analysis
+                </a>
+                <a href="#" class="nav-link" data-tab="geo-analysis">
+                    <i class="fas fa-map-marker-alt"></i> Geo Analysis
+                </a>
+            </div>
+            <div class="filter-section">
+                <h3>Filters</h3>
+                
+                <!-- Product Filter Group - Collapsible -->
+                <div class="filter-group expanded" id="product-filter-group">
+                    <div class="filter-group-header" onclick="toggleFilterGroup('product-filter-group')">
+                        <label>PRODUCT</label>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="filter-group-content">
+                        <!-- Search input for Product filter -->
+                        <div class="search-container">
+                            <!-- <i class="fas fa-search"></i> -->
+                            <input type="text" id="product-search" placeholder="Search products...">
+                        </div>
+                        <div class="checkbox-select">
+                            <div class="select-all">
+                                <input type="checkbox" id="select-all-products">
+                                <label for="select-all-products">Select All</label>
+                            </div>
+                            <div class="checkbox-options" id="product-options">
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="product-1" value="Unsecured Business Loan">
+                                    <label for="product-1">Unsecured Business Loan</label>
+                                </div>
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="product-2" value="Home Loan">
+                                    <label for="product-2">Home Loan</label>
+                                </div>
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="product-3" value="Loan Against Property">
+                                    <label for="product-3">Loan Against Property</label>
+                                </div>
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="product-4" value="Secured Business Loan">
+                                    <label for="product-4">Secured Business Loan</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Region Filter Group - Collapsible -->
+                <div class="filter-group expanded" id="region-filter-group">
+                    <div class="filter-group-header" onclick="toggleFilterGroup('region-filter-group')">
+                        <label>ASM REGION STATE</label>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="filter-group-content">
+                        <!-- Search input for Region filter -->
+                        <div class="search-container">
+                            <!-- <i class="fas fa-search"></i> -->
+                            <input type="text" id="region-search" placeholder="Search regions...">
+                        </div>
+                        <div class="checkbox-select">
+                            <div class="select-all">
+                                <input type="checkbox" id="select-all-regions">
+                                <label for="select-all-regions">Select All</label>
+                            </div>
+                            <div class="checkbox-options" id="region-options">
+                                <!-- Will be populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Feedback Filter Group - Collapsible -->
+                <div class="filter-group expanded" id="feedback-filter-group">
+                    <div class="filter-group-header" onclick="toggleFilterGroup('feedback-filter-group')">
+                        <label>FEEDBACK NOTATION</label>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="filter-group-content">
+                        <!-- Search input for Feedback filter -->
+                        <div class="search-container">
+                            <!-- <i class="fas fa-search"></i> -->
+                            <input type="text" id="feedback-search" placeholder="Search feedback...">
+                        </div>
+                        <div class="checkbox-select">
+                            <div class="select-all">
+                                <input type="checkbox" id="select-all-feedback" >
+                                <label for="select-all-feedback">Select All</label>
+                            </div>
+                            <div class="checkbox-options" id="feedback-options">
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="feedback-1" value="POSITIVE">
+                                    <label for="feedback-1">POSITIVE</label>
+                                </div>
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="feedback-2" value="Negative">
+                                    <label for="feedback-2">Negative</label>
+                                </div>
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="feedback-3" value="Did not Connect">
+                                    <label for="feedback-3">Did not Connect</label>
+                                </div>
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="feedback-4" value="Customer Busy">
+                                    <label for="feedback-4">Customer Busy</label>
+                                </div>
+                                <div class="checkbox-option">
+                                    <input type="checkbox" id="feedback-5" value="Pending">
+                                    <label for="feedback-5">Pending</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loan Amount Filter Group - Collapsible -->
+                <div class="filter-group expanded" id="loan-amount-filter-group">
+                    <div class="filter-group-header" onclick="toggleFilterGroup('loan-amount-filter-group')">
+                        <label>LOAN AMOUNT RANGE</label>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="filter-group-content">
+                        <div class="range-inputs">
+                            <input type="number" id="min-loan" placeholder="Min" value="5000">
+                            <input type="number" id="max-loan" placeholder="Max" value="10000000">
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="apply-filters" id="apply-filters">Apply Filters</button>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="header" id="header">
+            <button class="toggle-btn" id="toggle-sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="header-title">Loan Data Dashboard</div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="main-content">
+            <!-- Quantitative Metrics Tab -->
+            <div class="content-wrapper active" id="quantitative-metrics">
+                <h1>Quantitative Metrics Dashboard</h1>
+                <p>This section contains charts and metrics displaying loan data statistics.</p>
+                
+                <!-- Charts Grid -->
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <div id="feedback-pie" style="width:700px; height:480px;"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div id="product-bar" style="width:700px; height:480px;"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div id="loan-box" style="width:700px; height:480px;"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div id="region-bar" style="width:700px; height:480px;"></div>
+                    </div>
+                </div>
+                
+                <div class="chart-container-xl">
+                    <div id="loan-amount-distribution-map" style="width: 1480px; height: 550px; background-color: #f9f9f9;">
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <h2>Loan Data</h2>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>SR.NO</th>
+                                <th>CUSTOMER NAME</th>
+                                <th>DATE</th>
+                                <th>APPLICATION NUMBER</th>
+                                <th>PRODUCT</th>
+                                <th>LOAN AMOUNT</th>
+                                <th>DISBURSED AMOUNT</th>
+                                <th>FEEDBACK NOTATION</th>
+                            </tr>
+                        </thead>
+                        <tbody id="loan-data-body">
+                            <!-- Will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sentiment Analysis Tab -->
+            <div class="content-wrapper" id="sentiment-analysis">
+                <h1>Sentiment Analysis Dashboard</h1>
+                <p>This section will contain sentiment analysis of customer feedback.</p>
+                <!-- Placeholders for sentiment visualizations -->
+                <div class="chart-grid">
+                        <!-- Total Disbursed Plot -->
+                        <div class="chart-container">
+                            <div id="total-disbursed-plot" style="width:700px; height:480px; align-items: center;"></div>
+                        </div>
+                        <!-- Sentiment Plot -->
+                        <div class="chart-container">
+                            <div id="sentiment-plot" style="width:700px; height:480px; align-items: center;"></div>
+                        </div>
+                        <!-- Region Sentiment Plot -->
+                        <div class="chart-container">
+                            <div id="region-sentiment-plot" style="width:700px; height:480px; align-items: center;"></div>
+                        </div>
+                        <!-- Average Loan Sentiment Plot -->
+                        <div class="chart-container">
+                            <div id="avg-loan-sentiment-plot" style="width:700px; height:480px; align-items: center;"></div>
+                        </div>
+                    </div>
+                    
+                
+                <!-- Feedback Table -->
+                <h2>Customer Feedback</h2>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>SR.NO</th>
+                                <th>CUSTOMER NAME</th>
+                                <th>CUSTOMER FEEDBACK</th>
+                                <th>FEEDBACK NOTATION</th>
+                            </tr>
+                        </thead>
+                        <tbody id="feedback-data-body">
+                            <!-- Will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Geo Analysis Tab -->
+            <div class="content-wrapper" id="geo-analysis">
+                <h1>Geographic Analysis Dashboard</h1>
+                <p>This section will contain geographic distribution of loans and related metrics.</p>
+                <!-- Placeholders for geo visualizations -->
+                                 <!-- <div class="chart-grid"> -->
+                        <!-- Total Disbursed Plot -->
+                        <div class="chart-container-xl2">
+                            <div id="positive-plot" style="height: 680px; width: 1480px; background-color: #f9f9f9; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            </div>
+                        </div>
+                                                <div class="chart-container-xl2">
+                            <div id="negative-plot" style="height: 680px; width: 1480px; background-color: #f9f9f9; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                            </div>
+                        </div>
+
+
+                <!-- Region Table -->
+                <h2>Regional Data</h2>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>SR.NO</th>
+                                <th>ASM REGION</th>
+                                <th>STATE</th>
+                                <th>TOTAL LOANS</th>
+                                <th>TOTAL AMOUNT</th>
+                                <th>AVG DISBURSED %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="region-data-body">
+                            <!-- Will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+    // Initialize variables to store data and charts
+    let loanData = [];
+    let charts = {};
+    
+    // Populate filter options
+    populateFilterOptions();
+    
+    // Fetch initial data, populate filters and initialize charts immediately
+    fetchDataAndInitializeCharts();
+    
+    // Toggle sidebar functionality
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+    const closeSidebarBtn = document.getElementById('close-sidebar');
+    const sidebar = document.getElementById('sidebar');
+    const header = document.getElementById('header');
+    const mainContent = document.getElementById('main-content');
+
+    toggleSidebarBtn.addEventListener('click', function() {
+        sidebar.classList.toggle('collapsed');
+        header.classList.toggle('sidebar-collapsed');
+        mainContent.classList.toggle('sidebar-collapsed');
+    });
+
+    closeSidebarBtn.addEventListener('click', function() {
+        sidebar.classList.add('collapsed');
+        header.classList.add('sidebar-collapsed');
+        mainContent.classList.add('sidebar-collapsed');
+    });
+
+    // Tab switching functionality
+    const tabLinks = document.querySelectorAll('.nav-link');
+    const contentWrappers = document.querySelectorAll('.content-wrapper');
+
+    tabLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const targetTab = this.getAttribute('data-tab');
+            
+            // Update active states
+            tabLinks.forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Show target content
+            contentWrappers.forEach(content => {
+                content.classList.remove('active');
+                if (content.id === targetTab) {
+                    content.classList.add('active');
+                }
+            });
+
+            // On mobile, close the sidebar after selecting a tab
+            if (window.innerWidth <= 768) {
+                sidebar.classList.add('collapsed');
+                header.classList.add('sidebar-collapsed');
+                mainContent.classList.add('sidebar-collapsed');
+            }
+        });
+    });
+
+    // Filter functionality
+    const applyFiltersBtn = document.getElementById('apply-filters');
+    
+    applyFiltersBtn.addEventListener('click', function() {
+        applyFilters();
+    });
+
+    // Search functionality for each filter section
+    const productSearch = document.getElementById('product-search');
+    productSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        searchInOptions('product-options', searchTerm);
+    });
+
+    const regionSearch = document.getElementById('region-search');
+    regionSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        searchInOptions('region-options', searchTerm);
+    });
+
+    const feedbackSearch = document.getElementById('feedback-search');
+    feedbackSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        searchInOptions('feedback-options', searchTerm);
+    });
+
+    function searchInOptions(containerId, searchTerm) {
+        const container = document.getElementById(containerId);
+        const options = container.querySelectorAll('.checkbox-option');
+        
+        options.forEach(option => {
+            const label = option.querySelector('label').textContent.toLowerCase();
+            if (label.includes(searchTerm)) {
+                option.style.display = 'flex';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    }
+
+    // Function to toggle filter group expansion
+    window.toggleFilterGroup = function(groupId) {
+        const group = document.getElementById(groupId);
+        group.classList.toggle('expanded');
+    };
+
+    // Combined function to fetch data and initialize charts immediately
+    function fetchDataAndInitializeCharts() {
+        // Get the loan data from the server
+        fetch('/')
+            .then(response => response.text())
+            .then(html => {
+                // Extract the loan_data from the HTML
+                const match = html.match(/loan_data\s*=\s*(\[.*?\]);/s);
+                if (match && match[1]) {
+                    try {
+                        loanData = JSON.parse(match[1]);
+                        
+                        // Populate filter options
+                        populateFilterOptions();
+                        
+                        // Update tables with all data
+                        updateTables(loanData);
+                        
+                        // Immediately initialize charts - don't wait for a separate call
+                        fetchChartsImmediately();
+                    } catch (e) {
+                        console.error('Error parsing loan data:', e);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+            });
+    }
+    
+    // Function to populate filter options
+    function populateFilterOptions() {
+        // ASM Region States
+        const regions = [
+            'Partner Business Branch', 'Alwar', 'Bhilwara', 'Palanpur',
+            'Bikaner', 'Paykosh Business Center', 'Neem Ka Thana',
+            'Sri Ganganagar', 'Behror Paykosh Center', 'NOKHA', 'Kishangarh',
+            'Himatnagar', 'Nokha', 'Jodhpur', 'Mehsana', 'SRI GANGANAGAR',
+            'Newai', 'NEWAI', 'KOTA', 'Ahmedabad Branch', 'BijayNagar',
+            'Nirman Nagar JAIPUR', 'HANUMANGARH', 'Kota', 'Shahpura', 'Pali',
+            'HEAD OFFICE, C - SCHEME, JAIPUR', 'BIJAYNAGAR', 'BALESAR',
+            'Jhotwara', 'ANUPGARH', 'Ajmer PayKosh Center', 'SRI DUNGARGARH',
+            'BHILWARA', 'BIKANER', 'RATANGARH', 'SHAHPURA', 'SURATGARH',
+            'Bundi Paykosh Center', 'Bundi', 'PALI', 'FALNA',
+            'Ramganjmandi Paykosh Center', 'Osian', 'Hindoli Paykosh Center',
+            'SADULSHAHAR Paykosh Center'
+        ];
+        
+        // Populate region options
+        const regionOptions = document.getElementById('region-options');
+        regionOptions.innerHTML = '';
+        
+        regions.forEach((region, index) => {
+            const option = document.createElement('div');
+            option.className = 'checkbox-option';
+            option.innerHTML = `
+                <input type="checkbox" id="region-${index + 1}" value="${region}">
+                <label for="region-${index + 1}">${region}</label>
+            `;
+            regionOptions.appendChild(option);
+        });
+        
+        // Set up select all functionality
+        setupSelectAll('select-all-products', 'product-options');
+        setupSelectAll('select-all-regions', 'region-options');
+        setupSelectAll('select-all-feedback', 'feedback-options');
+    }
+
+    // Function to set up select all functionality
+    function setupSelectAll(selectAllId, optionsContainerId) {
+        const selectAllCheckbox = document.getElementById(selectAllId);
+        const optionsContainer = document.getElementById(optionsContainerId);
+        const checkboxes = optionsContainer.querySelectorAll('input[type="checkbox"]');
+        
+        selectAllCheckbox.addEventListener('change', function() {
+            checkboxes.forEach(checkbox => {
+                // Only check/uncheck visible checkboxes (for search filtering)
+                if (checkbox.closest('.checkbox-option').style.display !== 'none') {
+                    checkbox.checked = this.checked;
+                }
+            });
+        });
+        
+        // Update select all when individual checkboxes change
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const visibleCheckboxes = Array.from(checkboxes).filter(
+                    cb => cb.closest('.checkbox-option').style.display !== 'none'
+                );
+                const allChecked = visibleCheckboxes.every(cb => cb.checked);
+                const anyChecked = visibleCheckboxes.some(cb => cb.checked);
+                
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = anyChecked && !allChecked;
+            });
+        });
+    }
+
+    // Function to get selected values from checkbox groups
+    function getSelectedValues(containerId) {
+        const container = document.getElementById(containerId);
+        const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    // Function to apply filters and update data
+    function applyFilters() {
+        // Get selected values from filters
+        const productFilter = getSelectedValues('product-options');
+        const regionFilter = getSelectedValues('region-options');
+        const feedbackFilter = getSelectedValues('feedback-options');
+        const minLoan = document.getElementById('min-loan').value ? parseFloat(document.getElementById('min-loan').value) : 0;
+        const maxLoan = document.getElementById('max-loan').value ? parseFloat(document.getElementById('max-loan').value) : Infinity;
+        
+        // Create filter object to send to server
+        const filters = {
+            product: productFilter.length > 0 ? productFilter : null,
+            region: regionFilter.length > 0 ? regionFilter : null,
+            feedback: feedbackFilter.length > 0 ? feedbackFilter : null,
+            min_loan: minLoan,
+            max_loan: maxLoan
+        };
+        
+        // Send filter request to server
+        fetch('/filtered-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(filters),
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Update filtered data
+            loanData = data.data;
+            
+            // Update tables with filtered data
+            updateTables(loanData);
+            
+            // Update charts with new data
+            updateCharts(data.graphs);
+            
+            // On mobile, close the sidebar after applying filters
+            if (window.innerWidth <= 768) {
+                sidebar.classList.add('collapsed');
+                header.classList.add('sidebar-collapsed');
+                mainContent.classList.add('sidebar-collapsed');
+            }
+        })
+        .catch(error => {
+            console.error('Error applying filters:', error);
+        });
+    }
+    
+    // Function to fetch charts immediately without waiting
+    function fetchChartsImmediately() {
+        // Create empty filter object for initial load
+        const filters = {
+            product: null,
+            region: null,
+            state: null,
+            feedback: null,
+            min_loan: 0,
+            max_loan: Infinity
+        };
+        
+        // Send request to get initial charts with no delay
+        fetch('/filtered-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(filters),
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Update charts with data right away
+            updateCharts(data.graphs);
+        })
+        .catch(error => {
+            console.error('Error fetching charts:', error);
+        });
+    }
+    
+    // Function to update charts with new data
+    function updateCharts(graphsData) {
+        // Update feedback pie chart
+        if (graphsData.feedback_pie) {
+            Plotly.newPlot('feedback-pie', graphsData.feedback_pie.data, graphsData.feedback_pie.layout);
+            charts.feedbackPie = true;
+        }
+        
+        // Update product bar chart
+        if (graphsData.product_bar) {
+            Plotly.newPlot('product-bar', graphsData.product_bar.data, graphsData.product_bar.layout);
+            charts.productBar = true;
+        }
+        
+        // Update loan box plot
+        if (graphsData.loan_box) {
+            Plotly.newPlot('loan-box', graphsData.loan_box.data, graphsData.loan_box.layout);
+            charts.loanBox = true;
+        }
+        
+        // Update region bar chart
+        if (graphsData.region_bar) {
+            Plotly.newPlot('region-bar', graphsData.region_bar.data, graphsData.region_bar.layout);
+            charts.regionBar = true;
+        }
+        
+        // Update loan amount distribution map
+        if (graphsData.loan_amount_distribution_map) {
+            Plotly.newPlot('loan-amount-distribution-map', graphsData.loan_amount_distribution_map.data, graphsData.loan_amount_distribution_map.layout);
+            charts.loanAmountDistributionMap = true;
+        }
+        
+        // Update total disbursed plot
+        if (graphsData.total_disbursed_plot) {
+            Plotly.newPlot('total-disbursed-plot', graphsData.total_disbursed_plot.data, graphsData.total_disbursed_plot.layout);
+            charts.totalDisbursedPlot = true;
+        }
+        
+        // Update sentiment plot
+        if (graphsData.sentiment_plot) {
+            Plotly.newPlot('sentiment-plot', graphsData.sentiment_plot.data, graphsData.sentiment_plot.layout);
+            charts.sentimentPlot = true;
+        }
+        
+        // Update region sentiment plot
+        if (graphsData.region_sentiment_plot) {
+            Plotly.newPlot('region-sentiment-plot', graphsData.region_sentiment_plot.data, graphsData.region_sentiment_plot.layout);
+            charts.regionSentimentPlot = true;
+        }
+        
+        // Update average loan sentiment plot
+        if (graphsData.avg_loan_sentiment_plot) {
+            Plotly.newPlot('avg-loan-sentiment-plot', graphsData.avg_loan_sentiment_plot.data, graphsData.avg_loan_sentiment_plot.layout);
+            charts.avgLoanSentimentPlot = true;
+        }
+        
+        // Update positive and negative plots
+        if (graphsData.positive_plot) {
+            Plotly.newPlot('positive-plot', graphsData.positive_plot.data, graphsData.positive_plot.layout);
+            charts.positivePlot = true;
+        }
+        
+        if (graphsData.negative_plot) {
+            Plotly.newPlot('negative-plot', graphsData.negative_plot.data, graphsData.negative_plot.layout);
+            charts.negativePlot = true;
+        }
+    }
+
+    // Function to update tables with filtered data
+    function updateTables(data) {
+        // Update loan data table
+        const loanTableBody = document.getElementById('loan-data-body');
+        loanTableBody.innerHTML = '';
+        
+        data.forEach((item, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${item['CUSTOMER NAME'] || ''}</td>
+                <td>${item['DATE'] || ''}</td>
+                <td>${item['APPLICATION NUMBER'] || ''}</td>
+                <td>${item['PRODUCT'] || ''}</td>
+                <td>${item['LOAN AMOUNT'] || ''}</td>
+                <td>${item['DISBURSED AMOUNT'] || ''}</td>
+                <td class="${(item['FEEDBACK NOTATION'] || '').toLowerCase()}-feedback">${item['FEEDBACK NOTATION'] || ''}</td>
+            `;
+            loanTableBody.appendChild(row);
+        });
+        
+        // Update feedback data table
+        const feedbackTableBody = document.getElementById('feedback-data-body');
+        feedbackTableBody.innerHTML = '';
+        
+        data.forEach((item, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${item['CUSTOMER NAME'] || ''}</td>
+                <td>${item['CUSTOMER FEEDBACK'] || ''}</td>
+                <td class="${(item['FEEDBACK NOTATION'] || '').toLowerCase()}-feedback">${item['FEEDBACK NOTATION'] || ''}</td>
+            `;
+            feedbackTableBody.appendChild(row);
+        });
+        
+        // Update region data table
+        // This would require aggregating the data by region
+        const regionDataBody = document.getElementById('region-data-body');
+        regionDataBody.innerHTML = '';
+        
+        // Group data by region
+        const regionGroups = {};
+        data.forEach(item => {
+            const region = item['ASM REGION STATE'] || 'Unknown';
+            if (!regionGroups[region]) {
+                regionGroups[region] = {
+                    count: 0,
+                    totalAmount: 0,
+                    totalDisbursed: 0,
+                    state: item['STATE'] || '-'
+                };
+            }
+            regionGroups[region].count++;
+            regionGroups[region].totalAmount += parseFloat(item['LOAN AMOUNT'] || 0);
+            regionGroups[region].totalDisbursed += parseFloat(item['DISBURSED AMOUNT'] || 0);
+        });
+        
+        // Add region data to table
+        let index = 1;
+        for (const region in regionGroups) {
+            const data = regionGroups[region];
+            const avgDisbursed = data.totalAmount > 0 ? (data.totalDisbursed / data.totalAmount * 100).toFixed(1) : '0.0';
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index++}</td>
+                <td>${region}</td>
+                <td>${data.state}</td>
+                <td>${data.count}</td>
+                <td>${data.totalAmount.toLocaleString()}</td>
+                <td>${avgDisbursed}%</td>
+            `;
+            regionDataBody.appendChild(row);
+        }
+    }
+
+    // Responsive behavior
+    window.addEventListener('resize', function() {
+        if (window.innerWidth <= 768) {
+            sidebar.classList.add('collapsed');
+            header.classList.add('sidebar-collapsed');
+            mainContent.classList.add('sidebar-collapsed');
+        }
+        
+        // Resize charts if they exist
+        for (const chartKey in charts) {
+            if (charts[chartKey]) {
+                const chartId = chartKeyToElementId(chartKey);
+                if (document.getElementById(chartId)) {
+                    Plotly.relayout(chartId, {});
+                }
+            }
+        }
+    });
+
+    // Helper function to convert chart key to element ID
+    function chartKeyToElementId(chartKey) {
+        switch(chartKey) {
+            case 'feedbackPie': return 'feedback-pie';
+            case 'productBar': return 'product-bar';
+            case 'loanBox': return 'loan-box';
+            case 'regionBar': return 'region-bar';
+            case 'loanAmountDistributionMap': return 'loan-amount-distribution-map';
+            case 'totalDisbursedPlot': return 'total-disbursed-plot';
+            case 'sentimentPlot': return 'sentiment-plot';
+            case 'regionSentimentPlot': return 'region-sentiment-plot';
+            case 'avgLoanSentimentPlot': return 'avg-loan-sentiment-plot';
+            case 'positivePlot': return 'positive-plot';
+            case 'negativePlot': return 'negative-plot';
+            default: return chartKey;
+        }
+    }
+
+    // Initialize for mobile
+    if (window.innerWidth <= 768) {
+        sidebar.classList.add('collapsed');
+        header.classList.add('sidebar-collapsed');
+        mainContent.classList.add('sidebar-collapsed');
+    }
+});
+    </script>
+</body>
+</html>

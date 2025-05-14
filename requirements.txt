@@ -1,0 +1,8 @@
+Flask
+pandas
+plotly
+textblob
+requests
+shapely
+numpy
+openpyxl
